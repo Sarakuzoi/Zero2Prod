@@ -3,8 +3,20 @@ name = "zero2prod"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+path = "src/lib.rs"
+
+# [bin] is inside an array, as we can have multiple binaries, but only one library file
+[[bin]]
+path = "src/main.rs"
+name = "zero2prod"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 actix-web = "4"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+# We use dev dependencies for when we don't need to include sth in the final application binary
+[dev-dependencies]
+reqwest = "0.11"
