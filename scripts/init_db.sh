@@ -30,12 +30,12 @@ DB_HOST="${POSTGRES_HOST:=localhost}"
 if [[ -z "${SKIP_DOCKER}" ]]
 then
 #   # if a postgres container is running, print instructions to kill it and exit
-#   RUNNING_POSTGRES_CONTAINER=$(docker ps --filter 'name=postgres' --format '{{.ID}}')
-#   if [[ -n $RUNNING_POSTGRES_CONTAINER ]]; then
-#     echo >&2 "there is a postgres container already running, kill it with"
-#     echo >&2 "    docker kill ${RUNNING_POSTGRES_CONTAINER}"
-#     exit 1
-#   fi
+  RUNNING_POSTGRES_CONTAINER=$(docker ps --filter 'name=postgres' --format '{{.ID}}')
+  if [[ -n $RUNNING_POSTGRES_CONTAINER ]]; then
+    echo >&2 "there is a postgres container already running, kill it with"
+    echo >&2 "    docker kill ${RUNNING_POSTGRES_CONTAINER}"
+    exit 1
+  fi
   # Launch postgres using Docker
   docker run \
       -e POSTGRES_USER=${DB_USER} \
