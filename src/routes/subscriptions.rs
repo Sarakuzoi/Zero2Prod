@@ -1,60 +1,50 @@
 use actix_web::{web, HttpResponse};
 use chrono::Utc;
 use sqlx::PgPool;
-use tracing::Instrument;
 use uuid::Uuid;
 
 #[derive(serde::Deserialize)]
-#[allow(dead_code)]
 pub struct FormData {
     email: String,
     name: String,
 }
 
-pub async fn subscribe(form: web::Form<FormData>, pool: web::Data<PgPool>) -> HttpResponse {
-    // We generate a random unique identifier to act as a request id, in order to identify
-    // what went wrong with related requests, as they are executed concurrently
-    let request_id = Uuid::new_v4();
-    let request_span = tracing::info_span!(
-        "Adding a new subscriber",
-        // tracing allows us to use structured info in the span. We use % to tell tracing to make use of the Display implementation for logging purposes
-        %request_id,
+#[tracing::instrument(
+    name = "Adding a new subscriber",
+    skip(form, pool),
+    fields(
+        request_id = %Uuid::new_v4(),
         subscriber_email = %form.email,
-        subscriber_name = %form.name
-    );
-    let _request_span_guard = request_span.enter();
+        subscriber_name = %form.name,
+    )
+)]
+pub async fn subscribe(form: web::Form<FormData>, pool: web::Data<PgPool>) -> HttpResponse {
+    match insert_subscriber(&pool, &form).await {
+        Ok(_) => HttpResponse::Ok().finish(),
+        Err(_) => HttpResponse::InternalServerError().finish(),
+    }
+}
 
-    let query_span = tracing::info_span!("Saving new subscriber details in the database");
-    tracing::info!("Saving new subscriber details in the database");
-    match sqlx::query!(
+#[tracing::instrument(
+    name = "Saving new subscriber details to the database",
+    skip(form, pool)
+)]
+pub async fn insert_subscriber(pool: &PgPool, form: &FormData) -> Result<(), sqlx::Error> {
+    sqlx::query!(
         r#"
-    INSERT INTO subscriptions (id, email, name, subscribed_at)
+    INSERT INTO subscriptions (id, email, name, subscribed_at) 
     VALUES ($1, $2, $3, $4)
-            "#,
+        "#,
         Uuid::new_v4(),
         form.email,
         form.name,
         Utc::now()
     )
-    // we cannot run multiple queries over the same db connection. Thus, we will be using a PgPool, so we can have a connection for each query
-    .execute(pool.get_ref())
-    .instrument(query_span)
+    .execute(pool)
     .await
-    {
-        Ok(_) => {
-            tracing::info!(
-                "request_id {} - New subscriber details have been saved",
-                request_id
-            );
-            HttpResponse::Ok().finish()
-        }
-        Err(e) => {
-            tracing::error!(
-                "request_id {} - Failed to execute query: {:?}",
-                request_id,
-                e
-            );
-            HttpResponse::InternalServerError().finish()
-        }
-    }
+    .map_err(|e| {
+        tracing::error!("Failed to execute query: {:?}", e);
+        e
+    })?;
+    Ok(())
 }

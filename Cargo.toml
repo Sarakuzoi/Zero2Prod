@@ -40,3 +40,4 @@ features = [
 # We use dev dependencies for when we don't need to include sth in the final application binary
 [dev-dependencies]
 reqwest = "0.11"
+once_cell = "1"
