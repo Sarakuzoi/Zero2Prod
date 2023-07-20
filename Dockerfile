@@ -9,5 +9,8 @@ RUN apt update && apt install lld clang -y
 COPY . .
 ENV SQLX_OFFLINE true
 RUN cargo build --release
+# With this environment variable, we make sure that our Docker image will have a separate config file, which will enable the app to accept connections
+# from any network interface
+ENV APP_ENVIRONMENT production
 # When docker run is executed, launch the binary
 ENTRYPOINT [ "./target/release/zero2prod" ]
