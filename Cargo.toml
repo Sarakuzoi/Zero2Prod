@@ -37,6 +37,7 @@ features = [
     "uuid",
     "chrono",
     "migrate",
+    "offline"
 ]
 
 # We use dev dependencies for when we don't need to include sth in the final application binary
