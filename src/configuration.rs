@@ -40,7 +40,7 @@ impl DatabaseSettings {
         PgConnectOptions::new()
             .host(&self.host)
             .port(self.port)
-            .password(&self.password.expose_secret())
+            .password(self.password.expose_secret())
             .username(&self.username)
             .ssl_mode(ssl_mode)
     }
