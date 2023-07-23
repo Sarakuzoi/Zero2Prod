@@ -44,6 +44,7 @@ impl DatabaseSettings {
             .username(&self.username)
             .ssl_mode(ssl_mode)
     }
+
     pub fn with_db(&self) -> PgConnectOptions {
         let mut options = self.without_db().database(&self.database_name);
         options.log_statements(tracing_log::log::LevelFilter::Trace);
@@ -68,6 +69,7 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
         .add_source(config::File::from(
             configuration_directory.join(environment_filename),
         ))
+        // E.g. `APP_APPLICATION__PORT=5001 would set `Settings.application.port`
         .add_source(
             config::Environment::with_prefix("APP")
                 .prefix_separator("_")
