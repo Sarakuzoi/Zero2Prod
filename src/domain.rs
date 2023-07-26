@@ -1,8 +1,8 @@
 use unicode_segmentation::UnicodeSegmentation;
 
 pub struct NewSubscriber {
-    _email: String,
-    _name: SubscriberName,
+    pub email: String,
+    pub name: SubscriberName,
 }
 
 pub struct SubscriberName(String);
@@ -25,5 +25,9 @@ impl SubscriberName {
         } else {
             Self(s)
         }
+    }
+
+    pub fn inner_ref(&self) -> &str {
+        &self.0
     }
 }
