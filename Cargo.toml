@@ -43,9 +43,13 @@ features = [
     "offline"
 ]
 
+[dependencies.reqwest]
+version = "0.11"
+default-features = false
+features = ["json", "rustls-tls"]
+
 # We use dev dependencies for when we don't need to include sth in the final application binary
 [dev-dependencies]
-reqwest = "0.11"
 once_cell = "1"
 claims = "0.7"
 fake = "2.3"
