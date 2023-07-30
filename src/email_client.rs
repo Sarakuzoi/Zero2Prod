@@ -5,14 +5,14 @@ use secrecy::{ExposeSecret, Secret};
 
 pub struct EmailClient {
     http_client: Client,
-    base_url: reqwest::Url,
+    base_url: String,
     sender: SubscriberEmail,
     authorization_token: Secret<String>,
 }
 
 impl EmailClient {
     pub fn new(
-        base_url: reqwest::Url,
+        base_url: String,
         sender: SubscriberEmail,
         authorization_token: Secret<String>,
     ) -> Self {
@@ -31,7 +31,7 @@ impl EmailClient {
         html_content: &str,
         text_content: &str,
     ) -> Result<(), reqwest::Error> {
-        let url = self.base_url.join("email").unwrap();
+        let url = format!("{}/email", self.base_url);
         let request_body = SendEmailRequest {
             from: self.sender.as_ref().to_owned(),
             to: recipient.as_ref().to_owned(),
@@ -55,6 +55,8 @@ impl EmailClient {
 }
 
 #[derive(serde::Serialize)]
+// JSON requests require pascal case
+#[serde(rename_all = "PascalCase")]
 struct SendEmailRequest {
     from: String,
     to: String,
@@ -67,6 +69,7 @@ struct SendEmailRequest {
 mod tests {
     use super::EmailClient;
     use crate::domain::SubscriberEmail;
+    use actix_web::dev::ResourcePath;
     use fake::{
         faker::{
             internet::en::SafeEmail,
@@ -75,20 +78,42 @@ mod tests {
         Fake, Faker,
     };
     use secrecy::Secret;
-    use wiremock::{matchers::any, Mock, MockServer, ResponseTemplate};
+    use wiremock::{
+        matchers::{any, header_exists, method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
+
+    struct SendEmailBodyMatcher;
+
+    // Anything that implements `Match` can be used as a matcher in `given` and `and`. Thus, we create our own matcher just for checking that the request body is valid JSON.
+    impl wiremock::Match for SendEmailBodyMatcher {
+        fn matches(&self, request: &wiremock::Request) -> bool {
+            // Try to parse the body as JSON value
+            let result: Result<serde_json::Value, _> = serde_json::from_slice(&request.body);
+            if let Ok(body) = result {
+                // Check that call the mandatory fields are populated without inspecting their value
+                body.get("From").is_some()
+                    && body.get("To").is_some()
+                    && body.get("Subject").is_some()
+                    && body.get("HtmlBody").is_some()
+                    && body.get("TextBody").is_some()
+            } else {
+                false
+            }
+        }
+    }
 
     #[tokio::test]
-    async fn send_email_fires_a_request_to_base_url() {
+    async fn send_email_sends_the_expected_request() {
         // Arrange
         let mock_server = MockServer::start().await;
         let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
-        let email_client = EmailClient::new(
-            reqwest::Url::parse(&mock_server.uri()).unwrap(),
-            sender,
-            Secret::new(Faker.fake()),
-        );
+        let email_client = EmailClient::new(mock_server.uri(), sender, Secret::new(Faker.fake()));
 
-        Mock::given(any())
+        Mock::given(header_exists("X-Postmark-Server-Token"))
+            .and(path("/email"))
+            .and(method("POST"))
+            // .and(SendEmailBodyMatcher)
             .respond_with(ResponseTemplate::new(200))
             .expect(1)
             .mount(&mock_server)
