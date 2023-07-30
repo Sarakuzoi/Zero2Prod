@@ -4,12 +4,12 @@ use reqwest::Client;
 
 pub struct EmailClient {
     http_client: Client,
-    base_url: String,
+    base_url: reqwest::Url,
     sender: SubscriberEmail,
 }
 
 impl EmailClient {
-    pub fn new(base_url: String, sender: SubscriberEmail) -> Self {
+    pub fn new(base_url: reqwest::Url, sender: SubscriberEmail) -> Self {
         Self {
             http_client: Client::new(),
             base_url,
@@ -24,6 +24,8 @@ impl EmailClient {
         html_content: &str,
         text_content: &str,
     ) -> Result<(), String> {
+        let url = self.base_url.join("email").unwrap();
+        let builder = self.http_client.post(url);
         Ok(())
     }
 }
@@ -46,7 +48,8 @@ mod tests {
         // Arrange
         let mock_server = MockServer::start().await;
         let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
-        let email_client = EmailClient::new(mock_server.uri(), sender);
+        let email_client =
+            EmailClient::new(reqwest::Url::parse(&mock_server.uri()).unwrap(), sender);
 
         Mock::given(any())
             .respond_with(ResponseTemplate::new(200))
