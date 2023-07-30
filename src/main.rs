@@ -23,6 +23,7 @@ async fn main() -> Result<(), std::io::Error> {
     let email_client = EmailClient::new(
         reqwest::Url::parse(&configuration.email_client.base_url).unwrap(),
         sender_email,
+        configuration.email_client.authorization_token,
     );
 
     let address = format!(
