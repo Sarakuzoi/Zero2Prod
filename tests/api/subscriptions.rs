@@ -10,7 +10,6 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     // Arrange
     let test_app = spawn_app().await;
     let body = "name=sara%20kuzoi&email=sara_kuzoi%40gmail.com";
-
     Mock::given(path("/email"))
         .and(method("POST"))
         .respond_with(ResponseTemplate::new(200))
@@ -22,14 +21,30 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 
     // Assert
     assert_eq!(200, response.status().as_u16());
+}
 
-    let saved = sqlx::query!("SELECT email, name FROM subscriptions",)
+#[tokio::test]
+async fn subscribe_persists_the_new_subscriber() {
+    // Arrange
+    let test_app = spawn_app().await;
+    let body = "name=sara%20kuzoi&email=sara_kuzoi%40tuta.io";
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&test_app.email_server)
+        .await;
+
+    // Act
+    test_app.post_subscriptions(body.into()).await;
+
+    // Assert
+    let saved = sqlx::query!("SELECT email, name, status FROM subscriptions")
         .fetch_one(&test_app.db_pool)
         .await
-        .expect("Failed to fetch saved subscription.");
-
-    assert_eq!(saved.email, "sara_kuzoi@gmail.com");
+        .expect("Failed to fetch saved subscription");
     assert_eq!(saved.name, "sara kuzoi");
+    assert_eq!(saved.email, "sara_kuzoi@tuta.io");
+    assert_eq!(saved.status, "pending_confirmation");
 }
 
 #[tokio::test]
