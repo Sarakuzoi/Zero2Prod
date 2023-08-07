@@ -49,6 +49,7 @@ impl EmailClient {
                 "X-Postmark-Server-Token",
                 self.authorization_token.expose_secret(),
             )
+            // .header("Accept", "application/json")
             .json(&request_body)
             .send()
             .await?
