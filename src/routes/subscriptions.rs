@@ -44,7 +44,7 @@ pub async fn subscribe(
     let (subscriber_id, mut transaction) = match subscriber_id_option {
         Some(subscriber_id) => (subscriber_id, transaction),
         None => {
-            if let Err(_) = transaction.rollback().await {
+            if transaction.rollback().await.is_err() {
                 return HttpResponse::InternalServerError().finish();
             };
             let subscriber_id = get_subscriber_id_from_email(&pool, new_subscriber.email.as_ref())
@@ -104,21 +104,21 @@ pub async fn insert_subscriber(
     .execute(transaction)
     .await;
     match query {
-        Ok(_) => return Ok(Some(subscriber_id)),
+        Ok(_) => Ok(Some(subscriber_id)),
         Err(x) => match x {
             sqlx::Error::Database(db_error) => {
                 let postgres_err = db_error.downcast_ref::<postgres::PgDatabaseError>();
                 // Error code for violation of unique constraint
                 if postgres_err.code() == "23505" {
-                    return Ok(None);
+                    Ok(None)
                 } else {
                     tracing::error!("Failed to execute database query: {:?}", db_error);
-                    return Err(sqlx::Error::Database(db_error));
+                    Err(sqlx::Error::Database(db_error))
                 }
             }
             _ => {
                 tracing::error!("Failed to execute query: {:?}", x);
-                return Err(x);
+                Err(x)
             }
         },
     }
