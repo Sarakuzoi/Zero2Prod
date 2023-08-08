@@ -36,9 +36,26 @@ pub async fn subscribe(
         Ok(transaction) => transaction,
         Err(_) => return HttpResponse::InternalServerError().finish(),
     };
-    let subscriber_id = match insert_subscriber(&mut transaction, &new_subscriber).await {
-        Ok(subscriber_id) => subscriber_id,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
+    let subscriber_id_option =
+        match insert_subscriber(&mut transaction, &new_subscriber, &pool).await {
+            Ok(subscriber_id) => subscriber_id,
+            Err(_) => return HttpResponse::InternalServerError().finish(),
+        };
+    let (subscriber_id, mut transaction) = match subscriber_id_option {
+        Some(subscriber_id) => (subscriber_id, transaction),
+        None => {
+            if let Err(_) = transaction.rollback().await {
+                return HttpResponse::InternalServerError().finish();
+            };
+            let subscriber_id = get_subscriber_id_from_email(&pool, new_subscriber.email.as_ref())
+                .await
+                .unwrap();
+            let transaction = match pool.begin().await {
+                Ok(transaction) => transaction,
+                Err(_) => return HttpResponse::InternalServerError().finish(),
+            };
+            (subscriber_id, transaction)
+        }
     };
     let subscription_token = generate_subscription_token();
     if store_token(&mut transaction, subscriber_id, &subscription_token)
@@ -71,7 +88,8 @@ pub async fn subscribe(
 pub async fn insert_subscriber(
     transaction: &mut Transaction<'_, Postgres>,
     new_subscriber: &NewSubscriber,
-) -> Result<Uuid, sqlx::Error> {
+    pool: &PgPool,
+) -> Result<Option<Uuid>, sqlx::Error> {
     let subscriber_id = Uuid::new_v4();
     let query = sqlx::query!(
         r#"
@@ -86,14 +104,16 @@ pub async fn insert_subscriber(
     .execute(transaction)
     .await;
     match query {
-        Ok(_) => return Ok(subscriber_id),
+        Ok(_) => return Ok(Some(subscriber_id)),
         Err(x) => match x {
             sqlx::Error::Database(db_error) => {
                 let postgres_err = db_error.downcast_ref::<postgres::PgDatabaseError>();
                 // Error code for violation of unique constraint
                 if postgres_err.code() == "23505" {
-                    // TODO: Remove temporary fix for testing
-                    return Ok(subscriber_id);
+                    return Ok(None);
+                } else {
+                    tracing::error!("Failed to execute database query: {:?}", db_error);
+                    return Err(sqlx::Error::Database(db_error));
                 }
             }
             _ => {
@@ -102,11 +122,24 @@ pub async fn insert_subscriber(
             }
         },
     }
-    // .map_err(|e| {
-    //     tracing::error!("Failed to execute query: {:?}", e);
-    //     e
-    // })?;
-    Ok(subscriber_id)
+}
+
+pub async fn get_subscriber_id_from_email(
+    pool: &PgPool,
+    subscriber_email: &str,
+) -> Result<Uuid, sqlx::Error> {
+    let result = sqlx::query!(
+        "SELECT id FROM subscriptions \
+    WHERE email = $1",
+        subscriber_email
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to execute query: {:?}", e);
+        e
+    })?;
+    Ok(result.id)
 }
 
 #[tracing::instrument(

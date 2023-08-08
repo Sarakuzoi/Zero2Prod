@@ -116,7 +116,7 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
     assert_eq!(confirmation_links.html, confirmation_links.plain_text);
 }
 
-#[ignore = "Work in progress"]
+// #[ignore = "Work in progress"]
 #[tokio::test]
 async fn subscribing_twice_sends_two_confirmation_emails() {
     let app = spawn_app().await;
@@ -129,6 +129,8 @@ async fn subscribing_twice_sends_two_confirmation_emails() {
         .mount(&app.email_server)
         .await;
 
-    app.post_subscriptions(body.into()).await;
-    app.post_subscriptions(body.into()).await;
+    let first_response = app.post_subscriptions(body.into()).await;
+    let second_response = app.post_subscriptions(body.into()).await;
+    assert_eq!(first_response.status().as_u16(), 200);
+    assert_eq!(second_response.status().as_u16(), 200);
 }
