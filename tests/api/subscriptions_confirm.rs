@@ -116,3 +116,17 @@ async fn clicking_twice_on_the_confirmation_link_confirms_a_subscriber() {
     assert_eq!(query.name, "sara kuzoi");
     assert_eq!(query.status, "confirmed");
 }
+
+#[tokio::test]
+async fn token_formatted_correctly_but_non_existent_returns_a_401_unauthorized() {
+    let test_app = spawn_app().await;
+
+    let response = reqwest::get(&format!(
+        "{}/subscriptions/confirm?subscription_token=invalid-token",
+        test_app.address
+    ))
+    .await
+    .unwrap();
+
+    assert_eq!(response.status().as_u16(), 401);
+}
