@@ -122,7 +122,7 @@ async fn token_formatted_correctly_but_non_existent_returns_a_401_unauthorized()
     let test_app = spawn_app().await;
 
     let response = reqwest::get(&format!(
-        "{}/subscriptions/confirm?subscription_token=invalid-token",
+        "{}/subscriptions/confirm?subscription_token=KMQ1MQo1bgbuScnTlKX99kPN4",
         test_app.address
     ))
     .await

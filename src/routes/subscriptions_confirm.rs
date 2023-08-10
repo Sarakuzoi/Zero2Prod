@@ -1,5 +1,6 @@
 use actix_web::{web, HttpResponse};
 use sqlx::PgPool;
+use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
 
 #[derive(serde::Deserialize)]
@@ -12,6 +13,9 @@ pub struct Parameters {
 // The parameter of type web::Query<> instructs actix-web to only call the handler if the extractions was successful.
 // Otherwise it returns a 400 Bad Request
 pub async fn confirm(parameters: web::Query<Parameters>, pool: web::Data<PgPool>) -> HttpResponse {
+    if !token_is_valid(&parameters.subscription_token) {
+        return HttpResponse::BadRequest().finish();
+    }
     let id = match get_subscriber_id_from_token(&pool, &parameters.subscription_token).await {
         Ok(id) => id,
         Err(_) => return HttpResponse::InternalServerError().finish(),
@@ -28,7 +32,23 @@ pub async fn confirm(parameters: web::Query<Parameters>, pool: web::Data<PgPool>
     }
 }
 
-pub async fn get_subscriber_id_from_token(
+fn token_is_valid(s: &str) -> bool {
+    let is_empty_or_whitespace = s.trim().is_empty();
+
+    let invalid_length = s.graphemes(true).count() != 25;
+
+    let forbidden_characters = ['/', '(', ')', '"', '<', '>', '\\', '{', '}'];
+    // let contains_forbidden_characters = s.contains(forbidden_characters);
+    let contains_forbidden_characters = s.chars().any(|g| forbidden_characters.contains(&g));
+
+    if is_empty_or_whitespace || invalid_length || contains_forbidden_characters {
+        false
+    } else {
+        true
+    }
+}
+
+async fn get_subscriber_id_from_token(
     pool: &PgPool,
     subscription_token: &str,
 ) -> Result<Option<Uuid>, sqlx::Error> {
