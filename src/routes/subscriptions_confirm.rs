@@ -41,11 +41,7 @@ fn token_is_valid(s: &str) -> bool {
     // let contains_forbidden_characters = s.contains(forbidden_characters);
     let contains_forbidden_characters = s.chars().any(|g| forbidden_characters.contains(&g));
 
-    if is_empty_or_whitespace || invalid_length || contains_forbidden_characters {
-        false
-    } else {
-        true
-    }
+    !(is_empty_or_whitespace || invalid_length || contains_forbidden_characters)
 }
 
 async fn get_subscriber_id_from_token(
