@@ -135,7 +135,7 @@ async fn subscribing_twice_sends_two_confirmation_emails() {
 }
 
 #[tokio::test]
-async fn subscriber_fails_if_there_is_a_fatal_database_error() {
+async fn subscribe_fails_if_there_is_a_fatal_database_error() {
     // Arrange
     let test_app = spawn_app().await;
     let body = "name=sara%20kuzoi&email=sara_kuzoi%40tuta.io";
