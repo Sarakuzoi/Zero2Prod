@@ -128,14 +128,10 @@ pub async fn insert_subscriber(
                 if postgres_err.code() == "23505" {
                     Ok(None)
                 } else {
-                    tracing::error!("Failed to execute database query: {:?}", db_error);
                     Err(sqlx::Error::Database(db_error))
                 }
             }
-            _ => {
-                tracing::error!("Failed to execute query: {:?}", x);
-                Err(x)
-            }
+            _ => Err(x),
         },
     }
 }
@@ -175,10 +171,7 @@ pub async fn store_token(
     )
     .execute(transaction)
     .await
-    .map_err(|e| {
-        tracing::error!("Failed to execute query: {:?}", e);
-        StoreTokenError(e)
-    })?;
+    .map_err(|e| StoreTokenError(e))?;
     Ok(())
 }
 
