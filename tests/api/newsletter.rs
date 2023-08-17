@@ -6,7 +6,6 @@ use wiremock::{
 use crate::helpers::{spawn_app, TestApp};
 
 #[tokio::test]
-#[ignore]
 async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
     // Arrange
     let test_app = spawn_app().await;
