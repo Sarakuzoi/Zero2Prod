@@ -1,4 +1,3 @@
-#![allow(unused)]
 use crate::domain::SubscriberEmail;
 use reqwest::Client;
 use secrecy::{ExposeSecret, Secret};
@@ -28,7 +27,7 @@ impl EmailClient {
 
     pub async fn send_email(
         &self,
-        recipient: SubscriberEmail,
+        recipient: &SubscriberEmail,
         subject: &str,
         html_content: &str,
         text_content: &str,
@@ -42,8 +41,7 @@ impl EmailClient {
             text_body: text_content,
         };
         // The .json method serializes our `SendEmailRequest` into JSON, but also sets the "Content-Type" header to "application/json"
-        let builder = self
-            .http_client
+        self.http_client
             .post(url)
             .header(
                 "X-Postmark-Server-Token",
@@ -73,7 +71,6 @@ struct SendEmailRequest<'a> {
 mod tests {
     use super::EmailClient;
     use crate::domain::SubscriberEmail;
-    use actix_web::{cookie::time::Duration, dev::ResourcePath};
     use claims::{assert_err, assert_ok};
     use fake::{
         faker::{
@@ -150,7 +147,7 @@ mod tests {
 
         // Act
         let _ = email_client
-            .send_email(email(), &subject(), &content(), &content())
+            .send_email(&email(), &subject(), &content(), &content())
             .await;
     }
 
@@ -168,7 +165,7 @@ mod tests {
 
         // Act
         let outcome = email_client
-            .send_email(email(), &subject(), &content(), &content())
+            .send_email(&email(), &subject(), &content(), &content())
             .await;
 
         // Assert
@@ -189,7 +186,7 @@ mod tests {
 
         // Act
         let outcome = email_client
-            .send_email(email(), &subject(), &content(), &content())
+            .send_email(&email(), &subject(), &content(), &content())
             .await;
 
         // Assert
@@ -211,7 +208,7 @@ mod tests {
 
         // Act
         let outcome = email_client
-            .send_email(email(), &subject(), &content(), &content())
+            .send_email(&email(), &subject(), &content(), &content())
             .await;
 
         // Assert
