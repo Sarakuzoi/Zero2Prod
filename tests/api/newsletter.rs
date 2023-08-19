@@ -28,12 +28,7 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
             "html": "<p>Newsletter body as HTML</p>"
         }
     });
-    let response = reqwest::Client::new()
-        .post(&format!("{}/newsletter", &test_app.address))
-        .json(&newsletter_request_body)
-        .send()
-        .await
-        .expect("Failed to execute request.");
+    let response = test_app.post_newsletter(newsletter_request_body).await;
 
     // Assert
     assert_eq!(response.status().as_u16(), 200);
@@ -62,12 +57,7 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
             "html": "<p>Newsletter body as HTML</p>"
         }
     });
-    let response = reqwest::Client::new()
-        .post(&format!("{}/newsletter", &test_app.address))
-        .json(&newsletter_request_body)
-        .send()
-        .await
-        .expect("Failed to execute request.");
+    let response = test_app.post_newsletter(newsletter_request_body).await;
 
     // Assert
     assert_eq!(response.status().as_u16(), 200);
@@ -96,12 +86,7 @@ async fn newsletter_returns_a_400_for_invalid_data() {
     ];
     for (invalid_body, error_message) in test_cases {
         // Act
-        let response = reqwest::Client::new()
-            .post(&format!("{}/newsletter", &test_app.address))
-            .json(&invalid_body)
-            .send()
-            .await
-            .expect("Failed to execute request");
+        let response = test_app.post_newsletter(invalid_body).await;
 
         // Assert
         assert_eq!(
