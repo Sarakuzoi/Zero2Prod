@@ -40,7 +40,6 @@ pub async fn confirm(
     parameters: web::Query<Parameters>,
     pool: web::Data<PgPool>,
 ) -> Result<HttpResponse, ConfirmError> {
-    // TODO: Improve Error handling
     token_is_valid(&parameters.subscription_token)?;
     let id = get_subscriber_id_from_token(&pool, &parameters.subscription_token)
         .await
