@@ -8,6 +8,8 @@ use sqlx::PgPool;
 
 #[derive(thiserror::Error)]
 pub enum PublishError {
+    #[error("Authentification failed")]
+    AuthError(#[source] anyhow::Error),
     #[error(transparent)]
     UnexpectedError(#[from] anyhow::Error),
 }
@@ -22,6 +24,7 @@ impl ResponseError for PublishError {
     fn status_code(&self) -> reqwest::StatusCode {
         match self {
             PublishError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            PublishError::AuthError(_) => StatusCode::UNAUTHORIZED,
         }
     }
 }
@@ -44,7 +47,8 @@ pub async fn publish_newsletter(
     email_client: web::Data<EmailClient>,
     request: HttpRequest,
 ) -> Result<HttpResponse, PublishError> {
-    let _credentials = basic_authentification(request.headers());
+    let _credentials =
+        basic_authentification(request.headers()).map_err(PublishError::AuthError)?;
     let subscribers = get_confirmed_subscribers(&pool).await?;
     for subscriber in subscribers {
         match subscriber {
@@ -74,6 +78,7 @@ pub async fn publish_newsletter(
     Ok(HttpResponse::Ok().finish())
 }
 
+#[allow(dead_code)]
 struct Credentials {
     username: String,
     password: Secret<String>,
