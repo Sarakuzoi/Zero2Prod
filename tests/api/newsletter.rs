@@ -98,7 +98,6 @@ async fn newsletter_returns_a_400_for_invalid_data() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn requests_missing_authorization_are_rejected() {
     // Arrange
     let test_app = spawn_app().await;
@@ -121,7 +120,7 @@ async fn requests_missing_authorization_are_rejected() {
     assert_eq!(401, response.status().as_u16());
     assert_eq!(
         r#"Basic realm="publish""#,
-        response.headers()["WWW-Auhtentificate"]
+        response.headers()["WWW-Authenticate"]
     );
 }
 

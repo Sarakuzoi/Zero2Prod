@@ -1,8 +1,11 @@
 use crate::{domain::SubscriberEmail, email_client::EmailClient, routes::error_chain_fmt};
-use actix_web::{http::header::HeaderMap, web, HttpRequest, HttpResponse, ResponseError};
+use actix_web::{
+    http::header::{self, HeaderMap},
+    web, HttpRequest, HttpResponse, ResponseError,
+};
 use anyhow::Context;
 use base64::Engine;
-use reqwest::StatusCode;
+use reqwest::{header::HeaderValue, StatusCode};
 use secrecy::Secret;
 use sqlx::PgPool;
 
@@ -21,10 +24,19 @@ impl std::fmt::Debug for PublishError {
 }
 
 impl ResponseError for PublishError {
-    fn status_code(&self) -> reqwest::StatusCode {
+    fn error_response(&self) -> HttpResponse<actix_web::body::BoxBody> {
         match self {
-            PublishError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            PublishError::AuthError(_) => StatusCode::UNAUTHORIZED,
+            PublishError::UnexpectedError(_) => {
+                HttpResponse::new(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+            PublishError::AuthError(_) => {
+                let mut response = HttpResponse::new(StatusCode::UNAUTHORIZED);
+                let header_value = HeaderValue::from_str(r#"Basic realm="publish""#).unwrap();
+                response
+                    .headers_mut()
+                    .insert(header::WWW_AUTHENTICATE, header_value);
+                response
+            }
         }
     }
 }
@@ -87,10 +99,10 @@ struct Credentials {
 fn basic_authentification(headers: &HeaderMap) -> Result<Credentials, anyhow::Error> {
     // Header Value must be valid UTF8 string
     let header_value = headers
-        .get("Authentification")
-        .context("The 'Authentification' header was missing")?
+        .get("Authorization")
+        .context("The 'Authorization' header was missing")?
         .to_str()
-        .context("The 'Authentification' header was not a valid UTF8 string.")?;
+        .context("The 'Authorization' header was not a valid UTF8 string.")?;
     let base64encoded_segment = header_value
         .strip_prefix("Basic ")
         .context("The authorization scheme was not 'Basic'.")?;
