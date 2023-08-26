@@ -50,7 +50,7 @@ mod tests {
         assert_err!(SubscriberEmail::parse(email));
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Debug, Clone)]
     struct ValidEmailFixture(pub String);
 
     impl quickcheck::Arbitrary for ValidEmailFixture {
@@ -62,7 +62,6 @@ mod tests {
 
     #[quickcheck_macros::quickcheck]
     fn valid_emails_are_parsed_successfully(valid_email: ValidEmailFixture) -> bool {
-        dbg!(&valid_email.0);
         SubscriberEmail::parse(valid_email.0).is_ok()
     }
 }

@@ -107,7 +107,7 @@ pub async fn insert_subscriber(
     pool: &PgPool,
 ) -> Result<Option<Uuid>, sqlx::Error> {
     let subscriber_id = Uuid::new_v4();
-    let query = sqlx::query!(
+    let query: Result<postgres::PgQueryResult, sqlx::Error> = sqlx::query!(
         r#"
     INSERT INTO subscriptions (id, email, name, subscribed_at, status) 
     VALUES ($1, $2, $3, $4, 'pending_confirmation')
@@ -117,7 +117,7 @@ pub async fn insert_subscriber(
         new_subscriber.name.as_ref(),
         chrono::Utc::now()
     )
-    .execute(transaction)
+    .execute(&mut **transaction)
     .await;
     match query {
         Ok(_) => Ok(Some(subscriber_id)),
@@ -169,7 +169,7 @@ pub async fn store_token(
         subscription_token,
         subscriber_id
     )
-    .execute(transaction)
+    .execute(&mut **transaction)
     .await
     .map_err(StoreTokenError)?;
     Ok(())
