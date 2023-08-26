@@ -7,6 +7,7 @@ use anyhow::Context;
 use base64::Engine;
 use reqwest::{header::HeaderValue, StatusCode};
 use secrecy::{ExposeSecret, Secret};
+use sha3::Digest;
 use sqlx::PgPool;
 
 #[derive(thiserror::Error)]
@@ -138,10 +139,12 @@ async fn validate_credentials(
     creds: Credentials,
     pool: &PgPool,
 ) -> Result<uuid::Uuid, PublishError> {
+    let hashed_password = sha3::Sha3_256::digest(creds.password.expose_secret().as_bytes());
+    let hashed_password = format!("{:x}", hashed_password);
     let user_id = sqlx::query!(
-        r#"SELECT user_id FROM users WHERE username = $1 AND password = $2"#,
+        r#"SELECT user_id FROM users WHERE username = $1 AND password_hash = $2"#,
         creds.username,
-        creds.password.expose_secret()
+        hashed_password
     )
     .fetch_optional(pool)
     .await
