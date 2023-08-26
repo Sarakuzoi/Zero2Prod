@@ -6,7 +6,7 @@ use actix_web::{
 use anyhow::Context;
 use base64::Engine;
 use reqwest::{header::HeaderValue, StatusCode};
-use secrecy::Secret;
+use secrecy::{ExposeSecret, Secret};
 use sqlx::PgPool;
 
 #[derive(thiserror::Error)]
@@ -53,14 +53,21 @@ pub struct Content {
     text: String,
 }
 
+#[tracing::instrument(
+    name = "Publish a newsletter issue",
+    skip(body, pool, email_client, request),
+    fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
+)]
 pub async fn publish_newsletter(
     body: web::Json<BodyData>,
     pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
     request: HttpRequest,
 ) -> Result<HttpResponse, PublishError> {
-    let _credentials =
-        basic_authentification(request.headers()).map_err(PublishError::AuthError)?;
+    let credentials = basic_authentification(request.headers()).map_err(PublishError::AuthError)?;
+    tracing::Span::current().record("username", &tracing::field::display(&credentials.username));
+    let user_id = validate_credentials(credentials, &pool).await?;
+    tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
     let subscribers = get_confirmed_subscribers(&pool).await?;
     for subscriber in subscribers {
         match subscriber {
@@ -125,6 +132,26 @@ fn basic_authentification(headers: &HeaderMap) -> Result<Credentials, anyhow::Er
         username,
         password: Secret::new(password),
     })
+}
+
+async fn validate_credentials(
+    creds: Credentials,
+    pool: &PgPool,
+) -> Result<uuid::Uuid, PublishError> {
+    let user_id = sqlx::query!(
+        r#"SELECT user_id FROM users WHERE username = $1 AND password = $2"#,
+        creds.username,
+        creds.password.expose_secret()
+    )
+    .fetch_optional(pool)
+    .await
+    .context("Failed to execute a query to validate auth credentials")
+    .map_err(PublishError::UnexpectedError)?;
+
+    user_id
+        .map(|row| row.user_id)
+        .ok_or_else(|| anyhow::anyhow!("Invalid username or password"))
+        .map_err(PublishError::AuthError)
 }
 
 struct ConfirmedSubscriber {
