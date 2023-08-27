@@ -1,5 +1,6 @@
 use linkify::LinkKind;
 use once_cell::sync::Lazy;
+use sha3::Digest;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use wiremock::MockServer;
@@ -25,12 +26,43 @@ pub struct TestApp {
     pub db_pool: PgPool,
     pub email_server: MockServer,
     pub port: u16,
+    pub test_user: TestUser,
 }
 
 // Confirmation links embedded in the request to the email API.
 pub struct ConfirmationLinks {
     pub html: reqwest::Url,
     pub plain_text: reqwest::Url,
+}
+
+pub struct TestUser {
+    user_id: Uuid,
+    username: String,
+    password: String,
+}
+
+impl TestUser {
+    fn generate() -> Self {
+        Self {
+            user_id: Uuid::new_v4(),
+            username: Uuid::new_v4().to_string(),
+            password: Uuid::new_v4().to_string(),
+        }
+    }
+
+    async fn store(&self, pool: &PgPool) {
+        let password_hash = sha3::Sha3_256::digest(self.password.as_bytes());
+        let password_hash = format!("{:x}", password_hash);
+        sqlx::query!(
+            r#"INSERT INTO users (user_id, username, password_hash) VALUES ($1, $2, $3);"#,
+            self.user_id,
+            self.username,
+            password_hash,
+        )
+        .execute(pool)
+        .await
+        .expect("Failed to execute query.");
+    }
 }
 
 impl TestApp {
@@ -67,22 +99,13 @@ impl TestApp {
     }
 
     pub async fn post_newsletter(&self, body: serde_json::Value) -> reqwest::Response {
-        let (username, password) = self.get_username_password(&self.db_pool).await;
         reqwest::Client::new()
             .post(&format!("{}/newsletter", &self.address))
-            .basic_auth(username, Some(password))
+            .basic_auth(&self.test_user.username, Some(&self.test_user.password))
             .json(&body)
             .send()
             .await
             .expect("Failed to execute request.")
-    }
-
-    pub async fn get_username_password(&self, pool: &PgPool) -> (String, String) {
-        let credentials = sqlx::query!("SELECT username, password FROM users LIMIT 1")
-            .fetch_one(pool)
-            .await
-            .expect("Failed to execute query.");
-        (credentials.username, credentials.password)
     }
 }
 
@@ -112,13 +135,15 @@ pub async fn spawn_app() -> TestApp {
         .expect("Failed to build server");
     let application_port = application.port();
     let _ = tokio::spawn(application.run_until_stopped());
+    let test_user = TestUser::generate();
     let test_app = TestApp {
         address: format!("http://localhost:{}", application_port),
         port: application_port,
         db_pool: get_connection_pool(&configuration.database),
         email_server,
+        test_user,
     };
-    add_test_user(&test_app.db_pool).await;
+    test_app.test_user.store(&test_app.db_pool).await;
     test_app
 }
 
@@ -142,16 +167,4 @@ async fn configure_database(config: &DatabaseSettings) -> PgPool {
         .expect("Failed to migrate the databse.");
 
     connection_pool
-}
-
-async fn add_test_user(pool: &PgPool) {
-    sqlx::query!(
-        "INSERT INTO users (user_id, username, password) VALUES ($1, $2, $3)",
-        uuid::Uuid::new_v4(),
-        uuid::Uuid::new_v4().to_string(),
-        uuid::Uuid::new_v4().to_string()
-    )
-    .execute(pool)
-    .await
-    .expect("Failed to execute query.");
 }
