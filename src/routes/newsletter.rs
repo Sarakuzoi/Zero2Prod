@@ -4,11 +4,10 @@ use actix_web::{
     web, HttpRequest, HttpResponse, ResponseError,
 };
 use anyhow::Context;
-use argon2::{Algorithm, Params};
+use argon2::{Algorithm, Params, PasswordHasher};
 use base64::Engine;
 use reqwest::{header::HeaderValue, StatusCode};
 use secrecy::{ExposeSecret, Secret};
-use sha3::Digest;
 use sqlx::PgPool;
 
 #[derive(thiserror::Error)]
@@ -147,22 +146,38 @@ async fn validate_credentials(
             .context("Failed to build Argon2 parameters")
             .map_err(PublishError::UnexpectedError)?,
     );
-    let hashed_password = sha3::Sha3_256::digest(creds.password.expose_secret().as_bytes());
-    let hashed_password = format!("{:x}", hashed_password);
-    let user_id = sqlx::query!(
-        r#"SELECT user_id FROM users WHERE username = $1 AND password_hash = $2"#,
-        creds.username,
-        hashed_password
+    let row: Option<_> = sqlx::query!(
+        r#"SELECT user_id, password_hash, salt FROM users WHERE username=$1"#,
+        creds.username
     )
     .fetch_optional(pool)
     .await
-    .context("Failed to execute a query to validate auth credentials")
+    .context("Failed to perform a query to retrieve stored credentials.")
     .map_err(PublishError::UnexpectedError)?;
 
-    user_id
-        .map(|row| row.user_id)
-        .ok_or_else(|| anyhow::anyhow!("Invalid username or password"))
-        .map_err(PublishError::AuthError)
+    let (expected_password_hash, user_id, salt) = match row {
+        Some(row) => (row.password_hash, row.user_id, row.salt),
+        None => {
+            return Err(PublishError::AuthError(anyhow::anyhow!(
+                "Unknown username."
+            )));
+        }
+    };
+
+    let password_hash = hasher
+        .hash_password(creds.password.expose_secret().as_bytes(), &salt)
+        .context("Failed to hash password.")
+        .map_err(PublishError::UnexpectedError)?;
+
+    let password_hash = format!("{:x}", password_hash.hash.unwrap());
+
+    if password_hash != expected_password_hash {
+        Err(PublishError::AuthError(anyhow::anyhow!(
+            "Invalid password."
+        )))
+    } else {
+        Ok(user_id)
+    }
 }
 
 struct ConfirmedSubscriber {
