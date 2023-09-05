@@ -146,19 +146,16 @@ async fn validate_credentials(
         .map_err(PublishError::UnexpectedError)?
         .ok_or_else(|| PublishError::AuthError(anyhow::anyhow!("Unknown username")))?;
 
-    let expected_password_hash = PasswordHash::new(&expected_password_hash.expose_secret())
-        .context("Failed to parse password hash")
-        .map_err(PublishError::UnexpectedError)?;
+    // let expected_password_hash = PasswordHash::new(&expected_password_hash.expose_secret())
+    //     .context("Failed to parse password hash")
+    //     .map_err(PublishError::UnexpectedError)?;
 
-    tracing::info_span!("Verify password hash")
-        .in_scope(|| {
-            Argon2::default().verify_password(
-                creds.password.expose_secret().as_bytes(),
-                &expected_password_hash,
-            )
-        })
-        .context("Invalid password.")
-        .map_err(PublishError::AuthError)?;
+    tokio::task::spawn_blocking(move || {
+        validate_password_hash(expected_password_hash, creds.password)
+    })
+    .await
+    .context("Failed to spawn blocking task.")
+    .map_err(PublishError::UnexpectedError)??;
 
     Ok(user_id)
 }
@@ -178,6 +175,27 @@ async fn get_stored_credentials(
     .map(|row| (row.user_id, Secret::new(row.password_hash)));
 
     Ok(row)
+}
+
+#[tracing::instrument(
+    name = "Verify password hash",
+    skip(expected_password_hash, password_candidate)
+)]
+fn validate_password_hash(
+    expected_password_hash: Secret<String>,
+    password_candidate: Secret<String>,
+) -> Result<(), PublishError> {
+    let expected_password_hash = PasswordHash::new(expected_password_hash.expose_secret())
+        .context("Failed to parse hash in PHC string format.")
+        .map_err(PublishError::UnexpectedError)?;
+
+    Argon2::default()
+        .verify_password(
+            password_candidate.expose_secret().as_bytes(),
+            &expected_password_hash,
+        )
+        .context("Invalid password")
+        .map_err(PublishError::AuthError)
 }
 
 struct ConfirmedSubscriber {
