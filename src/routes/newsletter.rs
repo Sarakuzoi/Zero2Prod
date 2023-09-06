@@ -144,7 +144,7 @@ async fn validate_credentials(
     creds: Credentials,
     pool: &PgPool,
 ) -> Result<uuid::Uuid, PublishError> {
-    let (user_id, expected_password_hash) = get_stored_credentials(&creds.username, &pool)
+    let (user_id, expected_password_hash) = get_stored_credentials(&creds.username, pool)
         .await
         .map_err(PublishError::UnexpectedError)?
         .ok_or_else(|| PublishError::AuthError(anyhow::anyhow!("Unknown username")))?;
